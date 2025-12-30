@@ -1,7 +1,11 @@
 # 🧠 EDFbrowser for macOS (Apple Silicon)
 
-This guide provides detailed instructions on how to compile **EDFbrowser** from source on Mac computers equipped with **Apple Silicon (M1/M2/M3/M4)** chips. For a Chinese Version please refer to THIS.
->
+This guide provides detailed instructions on how to compile **EDFbrowser** from source on Mac computers equipped with **Apple Silicon (M1/M2/M3/M4)** chips. 
+
+> [!TIP]
+> For a Chinese Version please refer to **[This](https://github.com/hubandad/EDFbrowser-macOS/blob/main/README-CN.md)**.
+
+> [!IMPORTANT]
 > Applicable Systems: macOS 15 Sequoia (compatible with Ventura / Sonoma)
 >
 > Reference: Compiling EDFBrowser Mac Oct 2024
