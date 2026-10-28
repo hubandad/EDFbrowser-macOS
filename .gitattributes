@@ -1,0 +1,2 @@
+# Historical binary stays in Git history and the repository, outside source archives.
+/EDFbrowser.dmg export-ignore

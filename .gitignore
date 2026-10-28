@@ -1,0 +1,10 @@
+.build/
+dist/
+.DS_Store
+*.xcodeproj/xcuserdata/
+TestResults/
+
+# Local recordings and sessions are not distribution files.
+*.edf
+*.bdf
+*.edfsession

@@ -1,0 +1,30 @@
+PASS EDF+ mixed-rate sample counts and calibration
+PASS Independent EDFlib accepts native EDF+ output
+PASS BDF signed 24-bit extremes and independent validation
+PASS Annotation copy preserves physical/digital samples and Unicode
+PASS Discontinuous EDF+D onsets, gaps and lossless save
+PASS Truncation, growing files and malformed scaling
+PASS TAL malformed timestamps and UTF-8 are rejected
+PASS CSV quoting and annotation round trip
+PASS Wide and long signal CSV import/export
+PASS Welch PSD frequency and physical normalization
+PASS Butterworth, Bessel and Chebyshev response
+PASS Notch rejection and invalid cutoff guards
+PASS Resampling anti-aliasing
+PASS FIR coefficient normalization and aEEG envelope
+PASS Pan–Tompkins QRS timing and beat count
+PASS Crop, channel selection and downsample export
+PASS Envelope retains extrema, sufficient temporal resolution and real gaps
+PASS Microsecond crop start and annotation synchronization
+PASS Header calibration edits preserve raw digital data
+PASS Legacy XML montage linear combinations and IIR import
+PASS BioSemi status bit decoding
+PASS Parks–McClellan FIR passband and stopband
+PASS Z-ratio low/high frequency direction
+PASS Display units convert voltage values and preserve non-voltage units
+PASS Equivalent EDF voltage channels display equally without changing source calibration
+PASS PSD voltage conversion uses squared amplitude units
+  1 GiB sparse fixture indexed + last window in 0.023 s
+PASS 1 GiB sparse EDF indexing and last-window random access
+
+27 passed, 0 failed

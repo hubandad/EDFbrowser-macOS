@@ -1,253 +1,47 @@
-# 🧠 EDFbrowser for macOS (Apple Silicon)
+# EDFBrowser Mac
 
-This guide provides detailed instructions on how to compile **EDFbrowser** from source on Mac computers equipped with **Apple Silicon (M1/M2/M3/M4)** chips. 
+A native EDF/BDF viewer, annotator and signal-analysis application for **Apple Silicon Macs running macOS 14 or later**. Built with SwiftUI and AppKit, with Simplified Chinese and English interfaces and system light/dark appearance.
 
-> [!TIP]
-> For a Chinese Version please refer to **[This](https://github.com/hubandad/EDFbrowser-macOS/blob/main/README-CN.md)**.
+[简体中文](README-CN.md) · [Download v0.1.2](https://github.com/hubandad/EDFbrowser-macOS/releases/tag/v0.1.2) · [Feature matrix](docs/FEATURES.md)
 
-> [!IMPORTANT]
-> Applicable Systems: macOS 15 Sequoia (compatible with Ventura / Sonoma)
->
-> Reference: Compiling EDFBrowser Mac Oct 2024
+## Download and install
 
-------
+Download **[EDFBrowserMac-0.1.2-arm64.zip](https://github.com/hubandad/EDFbrowser-macOS/releases/download/v0.1.2/EDFBrowserMac-0.1.2-arm64.zip)**, extract it and open **EDFBrowser Mac.app**. You may move the app to Applications. Choose the built-in demonstration to open synthetic PSG data without a recording file or network connection.
 
-## 📋 Table of Contents
+The release also includes a corresponding source archive and `SHA256SUMS.txt`. This is a **development release**, signed locally with an ad-hoc signature. It is not yet signed with an Apple Developer ID or notarized. The arm64 build has been run on macOS 27.0.1; the macOS 14 deployment target still needs testing on physical machines running that version.
 
-- [Prerequisites & Warnings](https://www.google.com/search?q=%23-前置要求--警告)
-- [1. Setting up the Environment](https://www.google.com/search?q=%231-准备开发环境)
-- [2. Getting the Source Code](https://www.google.com/search?q=%232-获取源码)
-- [3. Modifying Source Code (Critical)](https://www.google.com/search?q=%233-源码修改-关键步骤)
-- [4. Build & Compile](https://www.google.com/search?q=%234-编译构建)
-- [5. Run & Install](https://www.google.com/search?q=%235-运行与安装)
-- [Troubleshooting](https://www.google.com/search?q=%23-常见问题排查-troubleshooting)
+## Main workflows
 
-------
+- Open EDF, EDF+, BDF and BDF+ recordings, including mixed sampling rates and discontinuities. Import and export signal/annotation CSV files.
+- Select channels beside their waveform labels, search channels, change color/gain/polarity and use reference or average-reference montages.
+- Display voltage signals in **μV**, converting source mV and V values correctly. A **100 μV range** spans −50 to +50 μV at default gain. Press **↑** to enlarge a waveform and **↓** to reduce it. Non-voltage channels retain their own units.
+- Show or hide the hypnogram; navigate and score sleep epochs, search/edit annotations, and undo/redo changes.
+- Use cursors and interval selections; apply filters; analyze Welch PSD, CDSA, aEEG, Z-ratio, event averages, signal/sleep statistics and QRS/RR/HRV.
+- Save annotated copies while retaining original digital samples and time gaps. Crop, select channels, resample and export recordings; export waveform PDF/PNG.
+- Use header validation/editing, legacy montage import, file combination, video synchronization and BioSemi trigger decoding.
 
-## 🛑 Prerequisites & Warnings
+See the [feature matrix and compatibility limits](docs/FEATURES.md), [v0.1.2 changes](docs/RELEASE-0.1.2.md) and [verification record](docs/TESTING.md). The application processes recording data locally. User recordings are not included in this repository or release assets.
 
-Please carefully read the following compatibility warnings before starting.
+## Build from source
 
-> [!WARNING]
->
-> Strictly avoid mixing Homebrew and MacPorts Qt libraries!
->
-> - This tutorial **requires** installing Qt5 via **MacPorts**.
-> - If you already have Qt installed via Homebrew, ensure you specify the MacPorts path strictly during compilation; otherwise, `qmake` conflicts will cause build failures.
+Requires Apple Silicon macOS and Apple Command Line Tools or Xcode with Swift 5.10 or later. No Qt, Python runtime, package manager or downloaded package dependency is required for the app.
 
-**System Requirements:**
-
-- **Hardware**: Apple Silicon (M-series chips)
-- **OS**: macOS Ventura / Sonoma / Sequoia
-- **Tools**:
-  - Xcode 16 + Command Line Tools
-  - MacPorts
-  - Qt5 (via MacPorts)
-
-------
-
-## 1. Setting up the Environment
-
-### 1.1 Install Xcode Command Line Tools
-
-Open Terminal and execute the following command to install the basic compilation tools:
-
-Bash
-
-```
-xcode-select --install
+```bash
+git clone https://github.com/hubandad/EDFbrowser-macOS.git
+cd EDFbrowser-macOS
+git checkout v0.1.2
+./scripts/check.sh --large
+./scripts/build.sh release
 ```
 
-Verify installation:
+The build script targets `arm64-apple-macosx14.0` and writes the application and ZIP to `dist/`. Build caches remain in `.build/`. `EDFCoreCheck` provides executable checks without XCTest; additional XCTest cases are under `Tests/EDFCoreTests` for full Xcode environments. This release has 27 passing core/large-file checks and an actual-window unit-conversion check with equivalent μV/mV/V signals.
 
-Bash
+## Source and license
 
-```
-xcode-select -p
-# Output should look like: /Library/Developer/CommandLineTools
-```
+The native application is **GPL-3.0-only**; see [LICENSE](LICENSE) and [third-party notices](THIRD_PARTY_NOTICES.md). Original GPL, LGPL and BSD component notices and license texts are retained. Source and build scripts corresponding to the distributed native application are included in this repository and the release source archive.
 
-### 1.2 Install MacPorts
+This is an independently developed macOS application and is not an official release by Teunis van Beelen.
 
-Go to the official website, download the installer for your specific OS version, and install it:
+## Legacy Qt package and guides
 
-🔗 Download Link: MacPorts Installation
-
-Verify installation:
-
-Bash
-
-```
-port version
-```
-
-### 1.3 Install Qt5 (Must use MacPorts)
-
-This is the most critical step. Please execute:
-
-Bash
-
-```
-sudo port install qt5-qtbase
-```
-
-**Verify Path** (Make sure the path is `/opt/local/...`):
-
-Bash
-
-```
-/opt/local/libexec/qt5/bin/qmake -v
-```
-
-*Expected output:* `QMake version 3.xxx` and `Using Qt version 5.15.15`.
-
-------
-
-## 2. Getting the Source Code
-
-Visit the official EDFbrowser website to download the latest source code (using version 2.14 as an example):
-
-🔗 Official Site: http://www.teuniz.net/edfbrowser/
-
-After downloading `edfbrowser_214_source.tar.gz`, create a working directory and extract the files:
-
-Bash
-
-```
-# Create and enter working directory
-mkdir ~/test_edfbrowser
-cd ~/test_edfbrowser
-
-# Assuming the downloaded file is in the Downloads folder
-mv ~/Downloads/edfbrowser_214_source.tar.gz .
-
-# Extract
-tar -zxvf edfbrowser_214_source.tar.gz
-
-# Enter source folder
-cd edfbrowser_214_source
-```
-
-------
-
-## 3. Modifying Source Code (Critical)
-
-> [!IMPORTANT]
->
-> For version 2.11 and above, you must modify the global.h file; otherwise, compilation will fail immediately.
-
-Open `global.h` with any text editor and locate **Line 56**.
-
-**Before modification:**
-
-C++
-
-```
-#error "configuration error"
-```
-
-**After modification (comment out the line):**
-
-C++
-
-```
-// #error "configuration error"
-```
-
-Save and exit the editor.
-
-------
-
-## 4. Build & Compile
-
-### 4.1 Generate Makefile
-
-**Note**: You must use the full path to call MacPorts' `qmake`. Do not type `qmake` directly (to avoid calling the system default version).
-
-Bash
-
-```
-/opt/local/libexec/qt5/bin/qmake
-```
-
-### 4.2 Start Compilation
-
-Use multi-core compilation (`-j8` uses 8 threads; adjust according to your computer's performance):
-
-Bash
-
-```
-make -j8
-```
-
-> 📝 **Tip**: You may see some Warning messages from third-party libraries during compilation. This is normal; please ignore them.
-
-------
-
-## 5. Run & Install
-
-### Test Run
-
-After compilation is complete, `EDFbrowser.app` will be generated in the directory.
-
-Bash
-
-```
-open ./EDFbrowser.app
-```
-
-If the GUI window pops up successfully, congratulations, the build succeeded! 🎉
-
-### Install to Applications Folder (Optional)
-
-Move it to the system applications directory to use it like a regular App:
-
-Bash
-
-```
-mv ./EDFbrowser.app /Applications/
-```
-
-------
-
-## 🔧 Troubleshooting
-
-If you encounter issues during the compilation process, please check the following points:
-
-<details>
-
-<summary><strong>❌ Error: qmake command not found</strong></summary>
-
-Most likely, Qt5 is not installed. Please run:
-
-<code>sudo port install qt5-qtbase</code>
-
-</details>
-
-<details>
-
-<summary><strong>❌ Error: Library version mismatch during compilation</strong></summary>
-
-Please check the qmake path you are using:
-
-<code>which qmake</code>
-
-If the output is not /opt/local/libexec/qt5/bin/qmake, you are using the wrong version. Be sure to use the absolute path when running qmake.
-
-</details>
-
-<details>
-
-<summary><strong>❌ Error: Xcode select error</strong></summary>
-
-Even if Xcode is installed, you sometimes need to relink the Command Line Tools:
-
-<code>xcode-select --install</code>
-
-</details>
-
-------
-
-## 📚 References
-
-- Original Guide: [Compiling EDFBrowser Mac Oct 2024](https://doi.org/10.13140/RG.2.2.16201.15208)
+The original [English Qt build guide](docs/legacy/README-Qt-en.md), [Chinese Qt build guide](docs/legacy/README-Qt-zh-CN.md) and their [Apache-2.0 documentation license](docs/legacy/LICENSE-Apache-2.0.txt) are preserved. The root `EDFbrowser.dmg` is the historical Qt package. Use the Release downloads above for the native SwiftUI/AppKit application. Preserving the historical files does not relicense any third-party software they contain.

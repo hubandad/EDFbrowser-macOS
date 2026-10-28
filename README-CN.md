@@ -1,217 +1,54 @@
-# 🧠 EDFbrowser for macOS (Apple Silicon)
+# EDFBrowser Mac
 
-[](https://www.apple.com/mac/)
-[](https://www.google.com/search?q=)
-[](https://www.macports.org/)
+[English](README.md) · [下载 v0.1.2](https://github.com/hubandad/EDFbrowser-macOS/releases/tag/v0.1.2)
 
-本指南详细介绍了如何在搭载 **Apple Silicon (M1/M2/M3/M4)** 芯片的 Mac 电脑上，从源码编译 **EDFbrowser**。
+Apple Silicon 专用的原生 EDF/BDF 阅览、标注与分析应用。SwiftUI + AppKit 界面，最低部署目标 macOS 14，支持简体中文与英文，跟随系统浅色/深色外观。
 
-> **适用系统**：macOS 15 Sequoia (兼容 Ventura / Sonoma)
-> **参考来源**：[Compiling EDFBrowser Mac Oct 2024](https://doi.org/10.13140/RG.2.2.16201.15208)
+这是可运行的 **0.1.2 开发版**。核心工作流已经实现并验证；与 Windows 版的具体对应关系和限制见 [功能对照](docs/FEATURES.md)。原项目许可、来源与校验值见 [第三方说明](THIRD_PARTY_NOTICES.md)。
 
------
+## 运行
 
-## 📋 目录 (Table of Contents)
+从 [v0.1.2 Release](https://github.com/hubandad/EDFbrowser-macOS/releases/tag/v0.1.2) 下载 `EDFBrowserMac-0.1.2-arm64.zip`，解压后双击 **EDFBrowser Mac.app**。可将应用拖到 Applications。应用内点击“查看演示”，即可打开 12 通道合成 PSG 记录，无需联网或准备数据。
 
-  - [前置要求 & 警告](https://www.google.com/search?q=%23-%E5%89%8D%E7%BD%AE%E8%A6%81%E6%B1%82--%E8%AD%A6%E5%91%8A)
-  - [1. 准备开发环境](https://www.google.com/search?q=%231-%E5%87%86%E5%A4%87%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83)
-  - [2. 获取源码](https://www.google.com/search?q=%232-%E8%8E%B7%E5%8F%96%E6%BA%90%E7%A0%81)
-  - [3. 源码修改 (关键步骤)](https://www.google.com/search?q=%233-%E6%BA%90%E7%A0%81%E4%BF%AE%E6%94%B9-%E5%85%B3%E9%94%AE%E6%AD%A5%E9%AA%A4)
-  - [4. 编译构建](https://www.google.com/search?q=%234-%E7%BC%96%E8%AF%91%E6%9E%84%E5%BB%BA)
-  - [5. 运行与安装](https://www.google.com/search?q=%235-%E8%BF%90%E8%A1%8C%E4%B8%8E%E5%AE%89%E8%A3%85)
-  - [常见问题排查 (Troubleshooting)](https://www.google.com/search?q=%23-%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5-troubleshooting)
+应用使用本地 ad-hoc 签名，尚未使用 Apple Developer ID 签名或 Apple 公证；对外正式发行前需要补上这两项。已在当前 Apple Silicon / macOS 27.0.1 机器上编译运行，最低系统 14 的实体机兼容性还需实际验收。
 
------
+## 常用操作
 
-## 🛑 前置要求 & 警告
+- `⌘O` 打开 EDF/EDF+/BDF/BDF+，支持多文件和拖放；按开始日期时间同步，也可切换到相对时间。
+- 通道选择与波形名称合并，直接在名称旁勾选；隐藏通道折叠成紧凑行，可重新勾选恢复。右键名称可上移、下移或反转。通道检查器可改名称、颜色、增益和极性。
+- `↑` 放大波形（量程减小），`↓` 缩小波形（量程增大），采用 1–2–5 步进；在文本框编辑时保留方向键原有行为。
+- 电压波形统一显示为 **μV**，自动将源文件的 mV ×1000、V ×1,000,000。工具栏明确标示“量程 100 μV”：默认增益下表示零线上下各 50 μV。每条波形名称下显示实际量程，游标、事件平均和频谱同步换算；非电压通道保留自己的单位。源文件校准及记录导出仍保持原单位。
+- 睡眠图可用右上角关闭按钮或工具栏“睡眠图”按钮隐藏/恢复，显示状态会记忆，也可随会话保存。
+- 记录文件通过上方文件名菜单切换；通道搜索位于记录栏。导联面板支持参考相减及 EEG 平均参考。
+- 在波形上拖动放大；`Shift` 拖动选区；单击设置游标 A，`Option` 单击设置 B；`Esc` 清除。左右键或 Page Up/Down 翻页。
+- 睡眠分期快捷键 `1=W, 2=N1, 3=N2, 4=N3, 5=REM, 6=未评分`；支持 20/30 秒 epoch 和自动前进。标注支持撤销/重做、搜索、编辑和 CSV 导入导出。
+- `⌘S` 保存带标注副本，保留原始数字样本和时间间隙；`⇧⌘S` 保存会话；`⌘E` 裁剪、选通道、重采样及导出 EDF+/BDF+/CSV。
+- 分析菜单提供滤波、功率谱、CDSA、aEEG、Z-ratio、事件平均、信号/睡眠统计以及 QRS/RR/HRV。
+- 文件菜单支持导出当前波形 PDF/PNG；工具菜单提供文件头编辑、校验、合并、视频同步、BioSemi 触发器和本地 TCP 控制。
 
-在开始之前，请务必阅读以下兼容性警告。
+界面语言在 Settings 中选择 System、简体中文或 English，重开窗口生效。设置中的屏幕点数/cm 用于导入 `.mtg` 后的物理尺度校准。
 
-> [\!WARNING]
-> **严禁混用 Homebrew 和 MacPorts 的 Qt 库！**
->
->   * 本教程**必须**使用 **MacPorts** 安装 Qt5。
->   * 如果你系统中已通过 Homebrew 安装了 Qt，请确保在编译时严格指定 MacPorts 的路径，否则 `qmake` 会发生冲突导致编译失败。
+## 构建
 
-**环境需求：**
-
-  * **硬件**：Apple Silicon (M 系列芯片)
-  * **系统**：macOS Ventura / Sonoma / Sequoia
-  * **工具**：
-      * Xcode 16 + Command Line Tools
-      * MacPorts
-      * Qt5 (via MacPorts)
-
------
-
-## 1\. 准备开发环境
-
-### 1.1 安装 Xcode Command Line Tools
-
-打开终端，执行以下命令安装基础编译工具：
+不需要 Qt、Python 运行时、第三方包管理器或联网依赖。构建使用 Apple 的 Swift 和 Command Line Tools；完整 Xcode 也可使用。
 
 ```bash
-xcode-select --install
+./scripts/check.sh
+./scripts/build.sh release
 ```
 
-验证安装：
+构建脚本将缓存保存在项目 `.build` 中，输出 arm64 应用和 ZIP 到 `dist`。为避开当前 Command Line Tools 中的 SwiftUI `@State` 宏插件缺失，项目使用显式的 property-wrapper 类型别名；不依赖该新宏。
 
-```bash
-xcode-select -p
-# 输出应类似：/Library/Developer/CommandLineTools
-```
+`EDFCoreCheck` 是不依赖 XCTest 的可执行校验器。`Tests/EDFCoreTests` 另外保留了 XCTest 用例，需完整 Xcode/XCTest 环境。具体复现方式见 [测试说明](docs/TESTING.md)。
 
-### 1.2 安装 MacPorts
+## License
 
-前往官方网站下载对应系统版本的安装包并安装：
-🔗 **下载地址**：[MacPorts Installation](https://www.macports.org/install.php)
+GPL-3.0-only，允许按许可条款商业使用和发行。发行修改版二进制时，应按 GPL 提供相应源代码、构建脚本和许可信息。第三方组件的原始许可和声明均予以保留。本项目未向任何外部服务上传记录数据。
 
-验证安装：
+---
 
-```bash
-port version
-```
+Native Apple Silicon EDF/BDF viewer, annotator and analysis workspace for macOS 14+. Built with SwiftUI/AppKit and reusable GPL/BSD/LGPL signal-processing components. The app runs fully locally. See the feature matrix for implemented capabilities, compatibility boundaries and the verification status of this development release.
 
-### 1.3 安装 Qt5 (必须使用 MacPorts)
+## 历史 Qt 版本
 
-这是最关键的一步，请执行：
-
-```bash
-sudo port install qt5-qtbase
-```
-
-**验证路径**（务必确认路径为 `/opt/local/...`）：
-
-```bash
-/opt/local/libexec/qt5/bin/qmake -v
-```
-
-*预期输出：* `QMake version 3.xxx` 和 `Using Qt version 5.15.15`。
-
------
-
-## 2\. 获取源码
-
-前往 EDFbrowser 官网下载最新源码（以 2.14 版本为例）：
-🔗 **官网**：[http://www.teuniz.net/edfbrowser/](http://www.teuniz.net/edfbrowser/)
-
-下载 `edfbrowser_214_source.tar.gz` 后，建立工作目录并解压：
-
-```bash
-# 创建并进入工作目录
-mkdir ~/test_edfbrowser
-cd ~/test_edfbrowser
-
-# 假设下载文件在 Downloads 文件夹
-mv ~/Downloads/edfbrowser_214_source.tar.gz .
-
-# 解压
-tar -zxvf edfbrowser_214_source.tar.gz
-
-# 进入源码文件夹
-cd edfbrowser_214_source
-```
-
------
-
-## 3\. 源码修改 (关键步骤)
-
-> [\!IMPORTANT]
-> 对于 2.11 及以上版本，**必须**修改 `global.h` 文件，否则编译将直接报错。
-
-使用任意文本编辑器打开 `global.h`，定位到 **第 56 行**。
-
-**修改前：**
-
-```cpp
-#error "configuration error"
-```
-
-**修改后（注释掉该行）：**
-
-```cpp
-// #error "configuration error"
-```
-
-保存并退出编辑器。
-
------
-
-## 4\. 编译构建
-
-### 4.1 生成 Makefile
-
-**注意**：必须使用全路径调用 MacPorts 的 `qmake`，切勿直接输入 `qmake`（以免调用系统默认版本）。
-
-```bash
-/opt/local/libexec/qt5/bin/qmake
-```
-
-### 4.2 开始编译
-
-使用多核编译（`-j8` 表示使用 8 个线程，可根据电脑性能调整）：
-
-```bash
-make -j8
-```
-
-> 📝 **提示**：编译过程中可能会出现一些第三方库的 Warning 警告，这属于正常现象，请忽略。
-
------
-
-## 5\. 运行与安装
-
-### 测试运行
-
-编译完成后，目录中会生成 `EDFbrowser.app`。
-
-```bash
-open ./EDFbrowser.app
-```
-
-如果 GUI 窗口成功弹出，恭喜你，编译成功！🎉
-
-### 安装到应用程序文件夹 (可选)
-
-将其移动到系统应用目录，以便像普通 App 一样使用：
-
-```bash
-mv ./EDFbrowser.app /Applications/
-```
-
------
-
-## 🔧 常见问题排查 (Troubleshooting)
-
-如果在编译过程中遇到问题，请检查以下几点：
-
-\<details\>
-\<summary\>\<strong\>❌ 错误：qmake command not found\</strong\>\</summary\>
-
-大概率是因为没有安装 Qt5。请运行：
-\<code\>sudo port install qt5-qtbase\</code\>
-
-\</details\>
-
-\<details\>
-\<summary\>\<strong\>❌ 错误：编译时提示库版本不匹配\</strong\>\</summary\>
-
-请检查你使用的 `qmake` 路径：
-\<code\>which qmake\</code\>
-如果输出不是 `/opt/local/libexec/qt5/bin/qmake`，说明你用错了版本。请务必使用**绝对路径**运行 qmake。
-
-\</details\>
-
-\<details\>
-\<summary\>\<strong\>❌ 错误：Xcode select error\</strong\>\</summary\>
-
-即使安装了 Xcode，有时也需要重新链接 Command Line Tools：
-\<code\>xcode-select --install\</code\>
-
-\</details\>
-
------
-
-## 📚 参考文献
-
-  * Original Guide: [Compiling EDFBrowser Mac Oct 2024](https://doi.org/10.13140/RG.2.2.16201.15208)
+仓库原有的 [英文编译指南](docs/legacy/README-Qt-en.md)、[中文编译指南](docs/legacy/README-Qt-zh-CN.md) 和对应的 [Apache-2.0 文档许可](docs/legacy/LICENSE-Apache-2.0.txt) 已保留。根目录 `EDFbrowser.dmg` 是历史 Qt 软件包；本次原生 SwiftUI/AppKit 版本请从 Release 下载。历史文件的保留不表示对其中第三方软件重新授权。
