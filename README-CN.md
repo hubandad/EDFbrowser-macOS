@@ -1,14 +1,16 @@
 # EDFBrowser Mac
 
-[English](README.md) · [下载 v0.1.2](https://github.com/hubandad/EDFbrowser-macOS/releases/tag/v0.1.2)
+[English](README.md) · [下载 v0.1.3](https://github.com/hubandad/EDFbrowser-macOS/releases/tag/v0.1.3)
 
 Apple Silicon 专用的原生 EDF/BDF 阅览、标注与分析应用。SwiftUI + AppKit 界面，最低部署目标 macOS 14，支持简体中文与英文，跟随系统浅色/深色外观。
 
-这是可运行的 **0.1.2 开发版**。核心工作流已经实现并验证；与 Windows 版的具体对应关系和限制见 [功能对照](docs/FEATURES.md)。原项目许可、来源与校验值见 [第三方说明](THIRD_PARTY_NOTICES.md)。
+这是可运行的 **0.1.3 开发版**。核心工作流已经实现并验证；与 Windows 版的具体对应关系和限制见 [功能对照](docs/FEATURES.md)。原项目许可、来源与校验值见 [第三方说明](THIRD_PARTY_NOTICES.md)。
+
+0.1.3 修复了播放波形时左下角状态文字闪烁、左右跳动的问题，见 [更新与验证说明](docs/RELEASE-0.1.3.md)。
 
 ## 运行
 
-从 [v0.1.2 Release](https://github.com/hubandad/EDFbrowser-macOS/releases/tag/v0.1.2) 下载 `EDFBrowserMac-0.1.2-arm64.zip`，解压后双击 **EDFBrowser Mac.app**。可将应用拖到 Applications。应用内点击“查看演示”，即可打开 12 通道合成 PSG 记录，无需联网或准备数据。
+从 [v0.1.3 Release](https://github.com/hubandad/EDFbrowser-macOS/releases/tag/v0.1.3) 下载 `EDFBrowserMac-0.1.3-arm64.zip`，解压后双击 **EDFBrowser Mac.app**。可将应用拖到 Applications。应用内点击“查看演示”，即可打开 12 通道合成 PSG 记录，无需联网或准备数据。
 
 应用使用本地 ad-hoc 签名，尚未使用 Apple Developer ID 签名或 Apple 公证；对外正式发行前需要补上这两项。已在当前 Apple Silicon / macOS 27.0.1 机器上编译运行，最低系统 14 的实体机兼容性还需实际验收。
 
@@ -51,4 +53,4 @@ Native Apple Silicon EDF/BDF viewer, annotator and analysis workspace for macOS 
 
 ## 历史 Qt 版本
 
-仓库原有的 [英文编译指南](docs/legacy/README-Qt-en.md)、[中文编译指南](docs/legacy/README-Qt-zh-CN.md) 和对应的 [Apache-2.0 文档许可](docs/legacy/LICENSE-Apache-2.0.txt) 已保留。根目录 `EDFbrowser.dmg` 是历史 Qt 软件包；本次原生 SwiftUI/AppKit 版本请从 Release 下载。历史文件的保留不表示对其中第三方软件重新授权。
+仓库原有的 [英文编译指南](docs/legacy/README-Qt-en.md)、[中文编译指南](docs/legacy/README-Qt-zh-CN.md) 和对应的 [Apache-2.0 文档许可](docs/legacy/LICENSE-Apache-2.0.txt) 已保留。历史 `EDFbrowser.dmg` 可在仓库历史中查看；本次原生 SwiftUI/AppKit 版本请从 Release 下载。历史文件的保留不表示对其中第三方软件重新授权。

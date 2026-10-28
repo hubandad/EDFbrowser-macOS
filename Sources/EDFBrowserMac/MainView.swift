@@ -104,8 +104,14 @@ struct MainView: View {
         }.padding(12).background(.bar)
     }
     var statusBar: some View {
-        HStack {
-            if model.busy || model.rendering { ProgressView().controlSize(.mini) }
+        let active = model.busy || model.isPlaying || model.rendering
+        return HStack(spacing:8) {
+            // Keep the activity slot in the layout across render completions.
+            // Playback is continuously active, even between its 100 ms updates.
+            ProgressView().controlSize(.mini).frame(width:14,height:14)
+                .opacity(active ? 1 : 0)
+                .accessibilityLabel(L.t("Updating waveforms","正在更新波形"))
+                .accessibilityHidden(!active)
             Text(model.status.isEmpty ? L.t("↑/↓ amplitude · Drag to zoom · Shift-drag to select","↑/↓ 调整幅度 · 拖动放大 · Shift 拖动选区") : model.status).lineLimit(1)
             Spacer()
             if let a = model.cursorA { Text("A \(EDFDate.clock(a))") }
