@@ -27,6 +27,9 @@ var passed = 0, failed = 0
 func test(_ name:String,_ body:() throws -> Void) {
     do { try body(); passed += 1; print("PASS \(name)") } catch { failed += 1; print("FAIL \(name): \(error)") }
 }
+func asyncTest(_ name:String,_ body:() async throws -> Void) async {
+    do { try await body(); passed += 1; print("PASS \(name)") } catch { failed += 1; print("FAIL \(name): \(error)") }
+}
 
 let demoURL = path("demo.edf")
 try Demo.generate(to:demoURL,duration:90)
@@ -252,6 +255,100 @@ test("PSD voltage conversion uses squared amplitude units") {
     let displayedPSD = try DSP.spectrum(SignalDisplayUnit(sourceUnit:"mV").series(source).values,rate:256)
     try check(near(displayedPSD.power[40],nativePSD.power[40]*1_000_000,1e-6),"mV² to microvolt² requires factor 10^6")
     try check(near(displayedPSD.power.reduce(0,+)*displayedPSD.resolution,1250,0.1),"50 microvolt peak sine has expected integrated PSD")
+}
+test("Workspace session preserves display, cursors, selection and scoring settings") {
+    let trace = Trace(sourceID:demo.id,channel:0,label:"EEG")
+    var state = SessionState(paths:[demoURL.path],fileIDs:[demo.id],traces:[trace],position:12,page:20,amplitude:50,annotations:[demo.annotations],absoluteTime:true)
+    state.autoScale = true; state.inspector = false; state.cursorA = 13.25; state.cursorB = 14.5
+    state.selection = 13.25...14.5; state.channelSearch = "EEG"; state.activeFileID = demo.id
+    state.selectedTrace = trace.id; state.annotationSelection = demo.annotations.first?.id
+    state.epoch = 20; state.scrollWithScoring = false; state.showHypnogram = false
+    let restored = try JSONDecoder().decode(SessionState.self,from:JSONEncoder().encode(state))
+    try restored.validate()
+    try check(restored.autoScale == true && restored.inspector == false && restored.showHypnogram == false,"display state")
+    try check(restored.cursorA == 13.25 && restored.cursorB == 14.5 && restored.selection == 13.25...14.5,"cursor measurements")
+    try check(restored.activeFileID == demo.id && restored.selectedTrace == trace.id && restored.channelSearch == "EEG","active workspace")
+    try check(restored.epoch == 20 && restored.scrollWithScoring == false,"false preferences survive encoding")
+    try check(restored.annotations[0] == demo.annotations,"annotation content is preserved")
+}
+test("Earlier Mac session files remain readable without new optional fields") {
+    let state = SessionState(paths:[demoURL.path],fileIDs:[demo.id],traces:[],position:0,page:30,amplitude:100,annotations:[[]],absoluteTime:true)
+    let bytes = try JSONEncoder().encode(state)
+    let object = try JSONSerialization.jsonObject(with:bytes) as! [String:Any]
+    try check(object["autoScale"] == nil && object["cursorA"] == nil,"legacy JSON has no new fields")
+    let old = try JSONDecoder().decode(SessionState.self,from:bytes); try old.validate()
+    try check(old.autoScale == nil && old.inspector == nil && old.epoch == nil,"legacy defaults remain distinguishable from saved false values")
+}
+test("Malformed workspace state is rejected before replacing open data") {
+    var state = SessionState(paths:[demoURL.path],fileIDs:[demo.id],traces:[],position:0,page:30,amplitude:100,annotations:[[]],absoluteTime:true)
+    state.position = -1; try expectFailure("negative session position") { try state.validate() }; state.position = 0
+    state.page = .infinity; try expectFailure("nonfinite session range") { try state.validate() }; state.page = 30
+    state.traces = [.init(sourceID:UUID(),channel:0,label:"missing")]
+    try expectFailure("orphan session trace") { try state.validate() }
+}
+test("Playback follows elapsed time and clamps at the final visible page") {
+    var clock = PlaybackClock(now:10)
+    let first = clock.advance(position:0,limit:60,now:10.1)
+    let delayed = clock.advance(position:first,limit:60,now:10.8)
+    try check(near(delayed,0.8),"delayed timer does not slow playback")
+    try check(near(clock.advance(position:59.95,limit:60,now:11.8),60),"final page is clamped")
+    try check(clock.advance(position:60,limit:60,now:12) == 60,"end does not advance")
+    try check(clock.advance(position:0,limit:0,now:13) == 0,"single-page recording remains at zero")
+    try check(clock.advance(position:5,limit:60,now:12) == 5,"monotonic clock never moves backwards")
+}
+test("Cursor amplitude reads actual samples and respects filters and polarity") {
+    let url = path("cursor-ramp.edf")
+    try EDFWriter.write(to:url,signals:[.init(label:"Ramp",unit:"uV",rate:1000,minimum:0,maximum:2000)],duration:2) { _,record,count in
+        (0..<count).map { Double(record*1000+$0) }
+    }
+    let file = try EDFFile(url:url), time = 1.537
+    var trace = Trace(sourceID:file.id,channel:0,label:"Ramp")
+    let full = try file.samples(channel:0,start:0,duration:2)
+    let coarse = try file.envelope(channel:0,start:0,duration:2,pixels:8)
+    try check(!coarse.times.contains(where:{near($0,time,1e-9)}),"chosen cursor sample is absent from the drawing envelope")
+    try check(near(try SignalEngine.value(trace:trace,file:file,time:time)!,full.values[1537]),"cursor reads the original sample")
+    trace.inverted = true
+    try check(near(try SignalEngine.value(trace:trace,file:file,time:time)!,-full.values[1537]),"cursor follows polarity")
+    trace.filters.lowPass = 40
+    let filtered = try SignalEngine.read(trace:trace,file:file,start:0,duration:2)
+    try check(near(try SignalEngine.value(trace:trace,file:file,time:time)!,filtered.values[1537]),"cursor matches the calibrated filtered signal")
+}
+test("Cursor measurements do not invent samples inside EDF+D gaps or past the end") {
+    let file = try EDFFile(url:path("gap.edf")), trace = Trace(sourceID:file.id,channel:0,label:"C3")
+    try check(try SignalEngine.value(trace:trace,file:file,time:2) == nil,"cursor in a gap is empty")
+    try check(try SignalEngine.value(trace:trace,file:file,time:3.25) != nil,"recorded cursor is readable")
+    try check(try SignalEngine.value(trace:trace,file:file,time:file.duration) == nil,"end boundary has no recorded sample")
+}
+await asyncTest("Canceled waveform reads and filters stop rather than returning obsolete data") {
+    let trace = Trace(sourceID:demo.id,channel:0,label:"EEG")
+    let input = try demo.samples(channel:0,start:0,duration:2)
+    let settings: FilterSettings = { var s = FilterSettings(); s.lowPass = 30; return s }()
+    for mode in 0..<4 {
+        let gate = DispatchSemaphore(value:0)
+        let worker = Task.detached { () throws -> SampleSeries in
+            gate.wait()
+            switch mode {
+            case 0: return try demo.samples(channel:0,start:0,duration:60)
+            case 1: return try demo.envelope(channel:0,start:0,duration:60,pixels:64)
+            case 2: return try SignalEngine.read(trace:trace,file:demo,start:0,duration:60)
+            default: return try DSP.filter(input,settings:settings)
+            }
+        }
+        worker.cancel(); gate.signal()
+        do { _ = try await worker.value; throw CheckFailure(description:"Canceled operation returned data: \(mode)") }
+        catch is CancellationError { }
+    }
+}
+await asyncTest("In-progress long FIR work responds promptly to cancellation") {
+    let count = 200_000
+    let input = SampleSeries(times:(0..<count).map { Double($0)/256 },values:[Double](repeating:1,count:count),rate:256)
+    let settings: FilterSettings = { var s = FilterSettings(); s.firTaps = [Double](repeating:1/4095,count:4095); return s }()
+    let worker = Task.detached { try DSP.filter(input,settings:settings) }
+    try await Task.sleep(nanoseconds:20_000_000)
+    let begin = ProcessInfo.processInfo.systemUptime; worker.cancel()
+    do { _ = try await worker.value; throw CheckFailure(description:"Canceled FIR completed obsolete work") }
+    catch is CancellationError { }
+    try check(ProcessInfo.processInfo.systemUptime-begin < 2,"FIR cancellation latency")
 }
 if CommandLine.arguments.contains("--large") {
     test("1 GiB sparse EDF indexing and last-window random access") {

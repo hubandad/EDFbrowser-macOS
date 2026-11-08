@@ -19,7 +19,6 @@ cp LICENSE "$app/Contents/Resources/LICENSE.txt"
 if [ -f THIRD_PARTY_NOTICES.md ]; then cp THIRD_PARTY_NOTICES.md "$app/Contents/Resources/"; fi
 if [ -f Resources/AppIcon.icns ]; then cp Resources/AppIcon.icns "$app/Contents/Resources/"; fi
 if [ -d Resources/Licenses ]; then cp -R Resources/Licenses "$app/Contents/Resources/"; fi
-if [ -d "$binary_dir/EDFBrowserMac_EDFBrowserMac.bundle" ]; then cp -R "$binary_dir/EDFBrowserMac_EDFBrowserMac.bundle" "$app/Contents/Resources/"; fi
 # iCloud/File Provider may attach Finder metadata to freshly created bundles.
 xattr -dr com.apple.FinderInfo "$app" 2>/dev/null || true
 xattr -dr com.apple.ResourceFork "$app" 2>/dev/null || true

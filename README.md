@@ -1,16 +1,18 @@
 # EDFBrowser Mac
 
+<img src="Resources/AppIcon.png" width="112" height="112" alt="EDFBrowser Mac icon">
+
 A native EDF/BDF viewer, annotator and signal-analysis application for **Apple Silicon Macs running macOS 14 or later**. Built with SwiftUI and AppKit, with Simplified Chinese and English interfaces and system light/dark appearance.
 
-[简体中文](README-CN.md) · [Download v0.1.3](https://github.com/hubandad/EDFbrowser-macOS/releases/tag/v0.1.3) · [Feature matrix](docs/FEATURES.md)
+[简体中文](README-CN.md) · [Download v0.1.4](https://github.com/hubandad/EDFbrowser-macOS/releases/tag/v0.1.4) · [Feature matrix](docs/FEATURES.md)
 
-Version 0.1.3 fixes the lower-left status text flickering during waveform playback. See the [verification notes](docs/RELEASE-0.1.3.md).
+Version 0.1.4 introduces a redesigned icon, complete session restoration, end-of-recording playback handling and sample-based cursor measurements. See the [verification notes](docs/RELEASE-0.1.4.md) and [optimization review](docs/OPTIMIZATION-AUDIT-0.1.4.md).
 
 ## Download and install
 
-Download **[EDFBrowserMac-0.1.3-arm64.zip](https://github.com/hubandad/EDFbrowser-macOS/releases/download/v0.1.3/EDFBrowserMac-0.1.3-arm64.zip)**, extract it and open **EDFBrowser Mac.app**. You may move the app to Applications. Choose the built-in demonstration to open synthetic PSG data without a recording file or network connection.
+Download **[EDFBrowserMac-0.1.4-arm64.zip](https://github.com/hubandad/EDFbrowser-macOS/releases/download/v0.1.4/EDFBrowserMac-0.1.4-arm64.zip)**, extract it and open **EDFBrowser Mac.app**. You may move the app to Applications. Choose the built-in demonstration to open synthetic PSG data without a recording file or network connection.
 
-The release also includes a corresponding source archive and `SHA256SUMS.txt`. This is a **development release**, signed locally with an ad-hoc signature. It is not yet signed with an Apple Developer ID or notarized. The arm64 build has been run on macOS 27.0.1; the macOS 14 deployment target still needs testing on physical machines running that version.
+The release also includes a corresponding source archive and `SHA256SUMS.txt`. This is a **development release**, signed locally with an ad-hoc signature. It is not yet signed with an Apple Developer ID or notarized. The arm64 build has been run on macOS 27.2; the macOS 14 deployment target still needs testing on physical machines running that version.
 
 ## Main workflows
 
@@ -22,7 +24,7 @@ The release also includes a corresponding source archive and `SHA256SUMS.txt`. T
 - Save annotated copies while retaining original digital samples and time gaps. Crop, select channels, resample and export recordings; export waveform PDF/PNG.
 - Use header validation/editing, legacy montage import, file combination, video synchronization and BioSemi trigger decoding.
 
-See the [feature matrix and compatibility limits](docs/FEATURES.md), [v0.1.3 changes](docs/RELEASE-0.1.3.md) and [verification record](docs/TESTING.md). The application processes recording data locally. User recordings are not included in this repository or release assets.
+See the [feature matrix and compatibility limits](docs/FEATURES.md), [v0.1.4 changes](docs/RELEASE-0.1.4.md) and [verification record](docs/TESTING.md). The application processes recording data locally. User recordings are not included in this repository or release assets.
 
 ## Build from source
 
@@ -31,12 +33,12 @@ Requires Apple Silicon macOS and Apple Command Line Tools or Xcode with Swift 5.
 ```bash
 git clone https://github.com/hubandad/EDFbrowser-macOS.git
 cd EDFbrowser-macOS
-git checkout v0.1.3
+git checkout v0.1.4
 ./scripts/check.sh --large
 ./scripts/build.sh release
 ```
 
-The build script targets `arm64-apple-macosx14.0` and writes the application and ZIP to `dist/`. Build caches remain in `.build/`. `EDFCoreCheck` provides executable checks without XCTest; additional XCTest cases are under `Tests/EDFCoreTests` for full Xcode environments. The 0.1.2 baseline passed 27 core/large-file checks and an actual-window unit-conversion check with equivalent μV/mV/V signals. Version 0.1.3 fixes the playback status-bar flicker; see its verification notes.
+The build script targets `arm64-apple-macosx14.0` and writes the application and ZIP to `dist/`. Build caches remain in `.build/`. `EDFCoreCheck` provides executable checks without XCTest; additional XCTest cases are under `Tests/EDFCoreTests` for full Xcode environments. Version 0.1.4 passes 35 core/workspace/large-file checks. Actual-window checks cover session restoration, unsaved edits, playback boundaries, calibrated cursor values and the new icon. See the verification notes for the tested limits.
 
 ## Source and license
 

@@ -10,8 +10,10 @@ public struct Spectrum: Sendable {
 public enum DSP {
     private static let filterLock = NSLock()
     public static func specification(_ input: [Double], rate: Double, spec: String) throws -> [Double] {
+        try Task.checkCancellation()
         var values = input, error = [CChar](repeating:0,count:1024)
         filterLock.lock(); defer { filterLock.unlock() }
+        try Task.checkCancellation()
         guard em_filter(&values,Int32(values.count),rate,spec,&error,Int32(error.count)) == 0 else { throw EDFError.invalid(String(cString:error)) }
         return values
     }
@@ -21,6 +23,7 @@ public enum DSP {
         return try specification(band.map(abs),rate:rate,spec:"LpBu4/0.5")
     }
     public static func filter(_ input: SampleSeries, settings: FilterSettings) throws -> SampleSeries {
+        try Task.checkCancellation()
         guard settings.isActive, !input.values.isEmpty else { return input }
         guard (1...8).contains(settings.order), settings.highPass >= 0, settings.lowPass >= 0, settings.notch >= 0,
               [settings.highPass,settings.lowPass,settings.notch].allSatisfy({ $0 < input.rate/2 }),
@@ -33,6 +36,7 @@ public enum DSP {
         }
         ranges.append(start..<input.values.count)
         for range in ranges where !range.isEmpty {
+            try Task.checkCancellation()
             var values = Array(input.values[range])
             var specs: [String] = []
             let model = settings.family == "Bessel" ? "Be" : settings.family == "Chebyshev" ? "Ch" : "Bu"
@@ -43,9 +47,12 @@ public enum DSP {
             specs += settings.extraSpecifications ?? []
             for spec in specs {
                 var error = [CChar](repeating: 0, count: 1024)
-                filterLock.lock()
-                let status = em_filter(&values, Int32(values.count), input.rate, spec, &error, Int32(error.count))
-                filterLock.unlock()
+                let status: Int32 = try {
+                    filterLock.lock(); defer { filterLock.unlock() }
+                    try Task.checkCancellation()
+                    return em_filter(&values, Int32(values.count), input.rate, spec, &error, Int32(error.count))
+                }()
+                try Task.checkCancellation()
                 guard status == 0 else { throw EDFError.invalid("Filter: " + String(cString: error)) }
             }
             if settings.powerline > 0 {
@@ -60,7 +67,10 @@ public enum DSP {
             }
             if !settings.firTaps.isEmpty {
                 let raw = values
-                for i in raw.indices { var v = 0.0; for j in 0..<min(i+1,settings.firTaps.count) { v += raw[i-j]*settings.firTaps[j] }; values[i] = v }
+                for i in raw.indices {
+                    if i.isMultiple(of:64) { try Task.checkCancellation() }
+                    var v = 0.0; for j in 0..<min(i+1,settings.firTaps.count) { v += raw[i-j]*settings.firTaps[j] }; values[i] = v
+                }
             }
             result.values.replaceSubrange(range, with: values)
         }

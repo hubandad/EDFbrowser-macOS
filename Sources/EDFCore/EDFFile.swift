@@ -119,6 +119,7 @@ public final class EDFFile: @unchecked Sendable, Identifiable {
     }
 
     public func samples(channel: Int, start: Double, duration: Double, limit: Int = 4_000_000) throws -> SampleSeries {
+        try Task.checkCancellation()
         guard channel >= 0, channel < header.signals.count, duration.isFinite, duration >= 0, start.isFinite else { throw EDFError.invalid("Invalid sample request") }
         let s = header.signals[channel], rate = s.sampleRate(header.recordDuration)
         guard !s.isAnnotation else { throw EDFError.invalid("Annotation channels are not waveforms") }
@@ -127,6 +128,7 @@ public final class EDFFile: @unchecked Sendable, Identifiable {
         guard !recordOnsets.isEmpty else { return SampleSeries(times: [], values: [], rate: rate) }
         try data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
             for r in first..<header.recordCount {
+                try Task.checkCancellation()
                 let onset = recordOnsets[r]
                 if onset >= end { break }
                 let a = Int(min(Double(s.samplesPerRecord),max(0,ceil((start - onset) * rate - 1e-7))))
@@ -135,6 +137,7 @@ public final class EDFFile: @unchecked Sendable, Identifiable {
                 guard values.count + b - a <= limit else { throw EDFError.unsupported("Selection exceeds \(limit) samples. Choose a shorter interval.") }
                 let base = header.headerBytes + r * header.bytesPerRecord + s.byteOffset
                 for i in a..<b {
+                    if i.isMultiple(of:4096) { try Task.checkCancellation() }
                     let p = base + i * header.bytesPerSample
                     var v = Int(raw[p]) | Int(raw[p+1]) << 8
                     if header.isBDF { v |= Int(raw[p+2]) << 16; if v & 0x800000 != 0 { v -= 0x1000000 } }
@@ -150,6 +153,8 @@ public final class EDFFile: @unchecked Sendable, Identifiable {
 
     /// Min/max envelope keeps short transients visible when zoomed out.
     public func envelope(channel: Int, start: Double, duration: Double, pixels: Int) throws -> SampleSeries {
+        try Task.checkCancellation()
+        guard header.signals.indices.contains(channel), start.isFinite, duration.isFinite, duration >= 0 else { throw EDFError.invalid("Invalid envelope request") }
         let rate = header.signals[channel].sampleRate(header.recordDuration)
         if duration * rate < Double(max(1,pixels) * 8) { return try samples(channel: channel, start: start, duration: duration) }
         var times: [Double] = [], values: [Double] = []
@@ -163,6 +168,7 @@ public final class EDFFile: @unchecked Sendable, Identifiable {
                 var minIndex = index, maxIndex = index
                 var j = index + 1
                 while j < chunk.values.count && chunk.times[j] < boundary {
+                    if j.isMultiple(of:4096) { try Task.checkCancellation() }
                     if chunk.values[j] < chunk.values[minIndex] { minIndex = j }
                     if chunk.values[j] > chunk.values[maxIndex] { maxIndex = j }; j += 1
                 }

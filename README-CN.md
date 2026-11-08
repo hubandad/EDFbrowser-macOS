@@ -1,18 +1,20 @@
 # EDFBrowser Mac
 
-[English](README.md) · [下载 v0.1.3](https://github.com/hubandad/EDFbrowser-macOS/releases/tag/v0.1.3)
+<img src="Resources/AppIcon.png" width="112" height="112" alt="EDFBrowser Mac icon">
+
+[English](README.md) · [下载 v0.1.4](https://github.com/hubandad/EDFbrowser-macOS/releases/tag/v0.1.4)
 
 Apple Silicon 专用的原生 EDF/BDF 阅览、标注与分析应用。SwiftUI + AppKit 界面，最低部署目标 macOS 14，支持简体中文与英文，跟随系统浅色/深色外观。
 
-这是可运行的 **0.1.3 开发版**。核心工作流已经实现并验证；与 Windows 版的具体对应关系和限制见 [功能对照](docs/FEATURES.md)。原项目许可、来源与校验值见 [第三方说明](THIRD_PARTY_NOTICES.md)。
+这是可运行的 **0.1.4 开发版**。核心工作流已经实现并验证；与 Windows 版的具体对应关系和限制见 [功能对照](docs/FEATURES.md)。原项目许可、来源与校验值见 [第三方说明](THIRD_PARTY_NOTICES.md)。
 
-0.1.3 修复了播放波形时左下角状态文字闪烁、左右跳动的问题，见 [更新与验证说明](docs/RELEASE-0.1.3.md)。
+0.1.4 带来全新图标、完整会话恢复、播放末尾处理和实际样本游标测量，见 [更新与验证说明](docs/RELEASE-0.1.4.md) 及 [功能优化检查](docs/OPTIMIZATION-AUDIT-0.1.4.md)。
 
 ## 运行
 
-从 [v0.1.3 Release](https://github.com/hubandad/EDFbrowser-macOS/releases/tag/v0.1.3) 下载 `EDFBrowserMac-0.1.3-arm64.zip`，解压后双击 **EDFBrowser Mac.app**。可将应用拖到 Applications。应用内点击“查看演示”，即可打开 12 通道合成 PSG 记录，无需联网或准备数据。
+从 [v0.1.4 Release](https://github.com/hubandad/EDFbrowser-macOS/releases/tag/v0.1.4) 下载 `EDFBrowserMac-0.1.4-arm64.zip`，解压后双击 **EDFBrowser Mac.app**。可将应用拖到 Applications。应用内点击“查看演示”，即可打开 12 通道合成 PSG 记录，无需联网或准备数据。
 
-应用使用本地 ad-hoc 签名，尚未使用 Apple Developer ID 签名或 Apple 公证；对外正式发行前需要补上这两项。已在当前 Apple Silicon / macOS 27.0.1 机器上编译运行，最低系统 14 的实体机兼容性还需实际验收。
+应用使用本地 ad-hoc 签名，尚未使用 Apple Developer ID 签名或 Apple 公证；对外正式发行前需要补上这两项。已在当前 Apple Silicon / macOS 27.2 机器上编译运行，最低系统 14 的实体机兼容性还需实际验收。
 
 ## 常用操作
 

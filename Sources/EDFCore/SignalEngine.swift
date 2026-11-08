@@ -1,7 +1,20 @@
 import Foundation
 
 public enum SignalEngine {
+    /// Cursor measurements use calibrated samples, not the min/max drawing envelope.
+    public static func value(trace:Trace,file:EDFFile,time:Double) throws -> Double? {
+        guard time.isFinite, time >= 0, time < file.duration else { return nil }
+        guard file.header.signals.indices.contains(trace.channel) else { throw EDFError.invalid("Missing cursor channel") }
+        let rate = file.header.signals[trace.channel].sampleRate(file.header.recordDuration)
+        let start = max(0,time-1/rate)
+        let samples = try read(trace:trace,file:file,start:start,duration:time-start+1.01/rate)
+        guard let index = samples.times.indices.min(by:{ abs(samples.times[$0]-time) < abs(samples.times[$1]-time) }),
+              abs(samples.times[index]-time) <= 0.5/rate+1e-7 else { return nil }
+        return samples.values[index]
+    }
+
     public static func read(trace: Trace, file: EDFFile, start: Double, duration: Double, envelopePixels: Int? = nil) throws -> SampleSeries {
+        try Task.checkCancellation()
         guard trace.channel >= 0, trace.channel < file.header.signals.count, !file.header.signals[trace.channel].isAnnotation else { throw EDFError.invalid("Montage refers to a missing or annotation channel") }
         if let pixels = envelopePixels, !trace.filters.isActive, trace.reference == nil, !trace.averageReference, trace.components == nil {
             var result = try file.envelope(channel: trace.channel,start: start,duration: duration,pixels:pixels)
@@ -23,6 +36,7 @@ public enum SignalEngine {
         if let components = trace.components {
             var sum = [Double](repeating:0,count:s.values.count)
             for component in components {
+                try Task.checkCancellation()
                 guard file.header.signals.indices.contains(component.channel), !file.header.signals[component.channel].isAnnotation else { throw EDFError.invalid("Missing montage component") }
                 let other = file.header.signals[component.channel]
                 guard other.samplesPerRecord == signal.samplesPerRecord else { throw EDFError.invalid("Montage component sample rates differ") }
@@ -43,6 +57,7 @@ public enum SignalEngine {
         if !references.isEmpty {
             var sum = [Double](repeating:0,count:s.values.count)
             for channel in references {
+                try Task.checkCancellation()
                 guard file.header.signals.indices.contains(channel), !file.header.signals[channel].isAnnotation else { throw EDFError.invalid("Missing reference channel") }
                 let ref = file.header.signals[channel]
                 guard ref.samplesPerRecord == signal.samplesPerRecord else { throw EDFError.invalid("Derivation channels must have equal sample rates") }
@@ -59,6 +74,7 @@ public enum SignalEngine {
             for i in sum.indices { s.values[i] -= (sum[i] + (trace.averageReference ? s.values[i] : 0))/denominator }
         }
         s = try DSP.filter(s,settings:trace.filters)
+        try Task.checkCancellation()
         let first = s.times.firstIndex { $0 >= start-1e-7 } ?? s.times.count
         s.times = Array(s.times.dropFirst(first)); s.values = Array(s.values.dropFirst(first))
         if trace.inverted { s.values = s.values.map { -$0 } }

@@ -25,21 +25,6 @@ enum Tool: String, Identifiable {
     case filters, spectrum, cdsa, aeeg, zeeg, average, statistics, qrs, export, header, validation, montage, video, help, csvImport, combine, remote
     var id: String { rawValue }
 }
-struct SessionState: Codable {
-    var paths: [String]
-    var fileIDs: [UUID]
-    var traces: [Trace]
-    var position: Double
-    var page: Double
-    var amplitude: Double
-    var annotations: [[EDFAnnotation]]
-    var absoluteTime: Bool
-    var patients: [String]?
-    var recordingIDs: [String]?
-    var signalEdits: [[Int:EDFSignal]]?
-    var startDates: [Date?]?
-    var showHypnogram: Bool?
-}
 struct Montage: Codable { var version = 1; var traces: [Trace] }
 
 @MainActor final class AppModel: ObservableObject {
@@ -74,8 +59,10 @@ struct Montage: Codable { var version = 1; var traces: [Trace] }
     @Published var isMonitoring = false
     @Published var revision = 0
     private var playTimer: Timer?
+    private var playbackClock: PlaybackClock?
     private var monitorTimer: Timer?
     private var renderTask: Task<Void,Never>?
+    private var renderWorker: Task<[RenderedTrace],Never>?
     private var scaleKeyMonitor: Any?
     var undoManager: UndoManager?
     var activeIndex: Int? { recordings.firstIndex { $0.id == activeFileID } ?? (recordings.isEmpty ? nil : 0) }
@@ -162,14 +149,15 @@ struct Montage: Codable { var version = 1; var traces: [Trace] }
         guard let i = traces.firstIndex(where: { $0.id == id }) else { return }; body(&traces[i]); revision += 1
     }
     func render(pixels: Int) {
-        renderTask?.cancel()
+        renderTask?.cancel(); renderWorker?.cancel()
         let visible = displayTraces.filter(\.visible), files = recordings.map(\.file), start = position, duration = page
         let offsets = Dictionary(uniqueKeysWithValues:files.map { ($0.id,offset(for:$0.id)) })
         rendering = true
-        renderTask = Task {
-            let result = await Task.detached(priority:.userInitiated) {
-                visible.map { trace -> RenderedTrace in
-                    guard let f = files.first(where: { $0.id == trace.sourceID }) else { return RenderedTrace(trace:trace,series:.empty,unit:"",error:"Missing source") }
+        let worker = Task.detached(priority:.userInitiated) {
+                var result: [RenderedTrace] = []
+                for trace in visible {
+                    guard !Task.isCancelled else { break }
+                    guard let f = files.first(where: { $0.id == trace.sourceID }) else { continue }
                     do {
                         let offset = offsets[f.id] ?? 0
                         var series = try SignalEngine.read(trace:trace,file:f,start:start-offset,duration:duration,envelopePixels:pixels)
@@ -177,12 +165,17 @@ struct Montage: Codable { var version = 1; var traces: [Trace] }
                         series = display.series(series)
                         series.times = series.times.map { $0+offset }
                         series.gapStarts = series.gapStarts.map { $0+offset }
-                        return RenderedTrace(trace:trace,series:series,unit:display.symbol,sourceToDisplay:display.multiplier)
-                    } catch { return RenderedTrace(trace:trace,series:.empty,unit:"",error:error.localizedDescription) }
+                        result.append(RenderedTrace(trace:trace,series:series,unit:display.symbol,sourceToDisplay:display.multiplier))
+                    } catch is CancellationError { break }
+                      catch { result.append(RenderedTrace(trace:trace,series:.empty,unit:"",error:error.localizedDescription)) }
                 }
-            }.value
+                return result
+        }
+        renderWorker = worker
+        renderTask = Task {
+            let result = await worker.value
             guard !Task.isCancelled else { return }
-            rendered = result; rendering = false
+            rendered = result; rendering = false; renderWorker = nil
         }
     }
     func setAnnotations(_ events: [EDFAnnotation], index: Int, registerUndo: Bool = true) {
@@ -225,18 +218,38 @@ struct Montage: Codable { var version = 1; var traces: [Trace] }
         }
     }
     func saveSession() {
+        _ = saveSessionWithPanel()
+    }
+    private func saveSessionWithPanel() -> Bool {
         let panel = NSSavePanel(); panel.nameFieldStringValue = "Recording.edfsession"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        let state = SessionState(paths:recordings.map { $0.file.url.path },fileIDs:recordings.map(\.id),traces:traces,position:position,page:page,amplitude:amplitude,annotations:recordings.map(\.annotations),absoluteTime:absoluteTime,patients:recordings.map(\.patient),recordingIDs:recordings.map(\.recording),signalEdits:recordings.map(\.signalEdits),startDates:recordings.map(\.startDate),showHypnogram:showHypnogram)
-        do { try JSONEncoder().encode(state).write(to:url,options:.atomic); for i in recordings.indices { recordings[i].dirty = false } } catch { report(error) }
+        guard panel.runModal() == .OK, let url = panel.url else { return false }
+        var state = SessionState(paths:recordings.map { $0.file.url.path },fileIDs:recordings.map(\.id),traces:traces,position:position,page:page,amplitude:amplitude,annotations:recordings.map(\.annotations),absoluteTime:absoluteTime,patients:recordings.map(\.patient),recordingIDs:recordings.map(\.recording),signalEdits:recordings.map(\.signalEdits),startDates:recordings.map(\.startDate),showHypnogram:showHypnogram)
+        state.autoScale = autoScale; state.inspector = inspector; state.cursorA = cursorA; state.cursorB = cursorB
+        state.selection = selection; state.channelSearch = channelSearch; state.activeFileID = active?.id
+        state.selectedTrace = focusedTrace?.id; state.annotationSelection = annotationSelection
+        state.epoch = epoch; state.scrollWithScoring = scrollWithScoring
+        do {
+            try state.validate(); try JSONEncoder().encode(state).write(to:url,options:.atomic)
+            for i in recordings.indices { recordings[i].dirty = false }
+            status = L.t("Session saved","会话已保存"); return true
+        } catch { report(error); return false }
     }
     func loadSession() {
         let panel = NSOpenPanel(); guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let s = try JSONDecoder().decode(SessionState.self,from:Data(contentsOf:url))
-            guard s.paths.count == s.fileIDs.count, s.annotations.count == s.paths.count, Set(s.fileIDs).count == s.fileIDs.count, Set(s.traces.map(\.id)).count == s.traces.count else { throw EDFError.invalid("Invalid session file") }
+            try s.validate()
             let opened = try s.paths.enumerated().map { i,path in try EDFFile(url:URL(fileURLWithPath:path),id:s.fileIDs[i]) }
             for trace in s.traces { guard let file = opened.first(where:{$0.id == trace.sourceID}) else { throw EDFError.invalid("Session trace source is missing") }; try trace.validate(for:file) }
+            if recordings.contains(where: \.dirty) {
+                let alert = NSAlert(); alert.messageText = L.t("Unsaved changes in this workspace","当前工作区有未保存的修改")
+                alert.informativeText = L.t("Opening a session replaces the current recordings. Save your current session to keep these changes.","打开会话会替换当前记录。可先保存当前会话以保留这些修改。")
+                alert.addButton(withTitle:L.t("Cancel","取消")); alert.addButton(withTitle:L.t("Save Current Session…","保存当前会话…")); alert.addButton(withTitle:L.t("Discard Changes and Open","放弃修改并打开"))
+                let answer = alert.runModal()
+                if answer == .alertFirstButtonReturn { return }
+                if answer == .alertSecondButtonReturn && !saveSessionWithPanel() { return }
+            }
+            stopPlayback(); stopMonitoring(); renderTask?.cancel(); renderWorker?.cancel(); rendered = []; rendering = false
             undoManager?.removeAllActions(withTarget:self)
             recordings = opened.enumerated().map { i,file in
                 var entry = RecordingEntry(file:file,annotations:s.annotations[i],patient:s.patients?.indices.contains(i) == true ? s.patients![i] : file.header.patient,recording:s.recordingIDs?.indices.contains(i) == true ? s.recordingIDs![i] : file.header.recording,dirty:false)
@@ -244,9 +257,15 @@ struct Montage: Codable { var version = 1; var traces: [Trace] }
                 entry.startDate = s.startDates?.indices.contains(i) == true ? s.startDates![i] : nil
                 return entry
             }
-            traces = s.traces; position = max(0,s.position); page = max(0.05,s.page); amplitude = max(0.001,s.amplitude); absoluteTime = s.absoluteTime
+            traces = s.traces; page = s.page; amplitude = s.amplitude; absoluteTime = s.absoluteTime
+            jump(s.position); autoScale = s.autoScale ?? false; inspector = s.inspector ?? true
+            cursorA = s.cursorA; cursorB = s.cursorB; selection = s.selection
+            channelSearch = s.channelSearch ?? ""; epoch = s.epoch ?? 30; scrollWithScoring = s.scrollWithScoring ?? true
             if let show = s.showHypnogram { showHypnogram = show }
-            activeFileID = recordings.first?.id; selectedTrace = traces.first?.id; revision += 1
+            activeFileID = s.activeFileID.flatMap { id in recordings.contains(where:{$0.id == id}) ? id : nil } ?? recordings.first?.id
+            selectedTrace = s.selectedTrace.flatMap { id in traces.contains(where:{$0.id == id}) ? id : nil } ?? traces.first?.id
+            annotationSelection = s.annotationSelection.flatMap { id in active?.annotations.contains(where:{$0.id == id}) == true ? id : nil }
+            status = L.t("Session restored","会话已恢复"); revision += 1
         } catch { report(error) }
     }
     func saveMontage() {
@@ -269,8 +288,25 @@ struct Montage: Codable { var version = 1; var traces: [Trace] }
         } catch { report(error) }
     }
     func togglePlayback() {
-        isPlaying.toggle(); playTimer?.invalidate()
-        if isPlaying { playTimer = Timer.scheduledTimer(withTimeInterval:0.1,repeats:true) { [weak self] _ in Task { @MainActor in self?.navigate(0.1) } } }
+        if isPlaying { stopPlayback(); return }
+        let limit = max(0,maximumTime-page)
+        guard !recordings.isEmpty, limit > 0 else { return }
+        if position >= limit { jump(0) }
+        isPlaying = true; playbackClock = PlaybackClock(now:ProcessInfo.processInfo.systemUptime)
+        let timer = Timer(timeInterval:0.1,repeats:true) { [weak self] _ in
+            Task { @MainActor in self?.advancePlayback() }
+        }
+        playTimer = timer; RunLoop.main.add(timer,forMode:.common)
+    }
+    private func advancePlayback() {
+        guard isPlaying, var clock = playbackClock else { return }
+        let limit = max(0,maximumTime-page)
+        position = clock.advance(position:position,limit:limit,now:ProcessInfo.processInfo.systemUptime)
+        playbackClock = clock
+        if position >= limit { stopPlayback() }
+    }
+    func stopPlayback() {
+        playTimer?.invalidate(); playTimer = nil; playbackClock = nil; isPlaying = false
     }
     func startMonitoring() {
         isMonitoring = true; monitorTimer?.invalidate()
@@ -311,5 +347,10 @@ struct Montage: Codable { var version = 1; var traces: [Trace] }
             guard alert.runModal() == .alertSecondButtonReturn else { return }
         }
         let id = recordings[index].id; recordings.remove(at:index); traces.removeAll { $0.sourceID == id }; activeFileID = recordings.first?.id; revision += 1
+        if selectedTrace.map({ selected in !traces.contains(where:{$0.id == selected}) }) ?? true { selectedTrace = traces.first?.id }
+        jump(position)
+        if recordings.isEmpty {
+            stopPlayback(); stopMonitoring(); renderTask?.cancel(); renderWorker?.cancel(); rendered = []; rendering = false
+        } else if position >= max(0,maximumTime-page) { stopPlayback() }
     }
 }

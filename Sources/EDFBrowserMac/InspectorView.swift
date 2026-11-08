@@ -82,6 +82,12 @@ struct AnnotationInspector: View {
 
 struct SignalInspector: View {
     @EnvironmentObject var model: AppModel
+    @ViewState private var cursorValues: [Double:Double] = [:]
+    @ViewState private var measuredKey = ""
+    @ViewState private var measurementError: String?
+    private var measurementKey: String {
+        "\(model.focusedTrace?.id.uuidString ?? "")-\(model.revision)-\(model.absoluteTime)-\(String(describing:model.cursorA))-\(String(describing:model.cursorB))"
+    }
     var body: some View {
         ScrollView {
             if let trace = model.focusedTrace, let file = model.recordings.first(where:{$0.id == trace.sourceID})?.file {
@@ -89,11 +95,11 @@ struct SignalInspector: View {
                 let displayUnit = SignalDisplayUnit(sourceUnit:signal.unit).symbol
                 Form {
                     Section(L.t("DISPLAY","显示")) {
-                        TextField(L.t("Label","名称"),text:binding(trace.id,\.label))
-                        Toggle(L.t("Visible","显示"),isOn:binding(trace.id,\.visible))
-                        Toggle(L.t("Invert polarity","反转极性"),isOn:binding(trace.id,\.inverted))
-                        Picker(L.t("Color","颜色"),selection:binding(trace.id,\.colorIndex)) { ForEach(0..<8) { i in Text("● \(i+1)").foregroundStyle(traceColors[i]).tag(i) } }
-                        Slider(value:binding(trace.id,\.gain),in:0.1...10) { Text(L.t("Gain","增益")) }
+                        TextField(L.t("Label","名称"),text:binding(trace,\.label))
+                        Toggle(L.t("Visible","显示"),isOn:binding(trace,\.visible))
+                        Toggle(L.t("Invert polarity","反转极性"),isOn:binding(trace,\.inverted))
+                        Picker(L.t("Color","颜色"),selection:binding(trace,\.colorIndex)) { ForEach(0..<8) { i in Text("● \(i+1)").foregroundStyle(traceColors[i]).tag(i) } }
+                        Slider(value:binding(trace,\.gain),in:0.1...10) { Text(L.t("Gain","增益")) }
                         Text(String(format:"× %.2f",trace.gain)).font(.caption.monospacedDigit())
                     }
                     Section(L.t("SOURCE","源数据")) {
@@ -117,19 +123,40 @@ struct SignalInspector: View {
                             if abs(b-a) > 0 { LabeledContent("1/Δt",value:String(format:"%.4f Hz",1/abs(b-a))) }
                             if let va = value(at:a,trace:trace), let vb = value(at:b,trace:trace) { LabeledContent(L.t("Δ amplitude","幅度差"),value:String(format:"%.5g %@",vb-va,displayUnit)) }
                         }
+                        if let measurementError { Text(measurementError).font(.caption).foregroundStyle(.orange) }
                         Button(L.t("Clear Cursors & Selection","清除游标与选区")) { model.cursorA = nil; model.cursorB = nil; model.selection = nil }
                     }
                     if model.recordings.count > 1 { Toggle(L.t("Synchronize by start date/time","按开始日期时间同步"),isOn:$model.absoluteTime) }
                 }.formStyle(.grouped)
             }
-        }
+        }.task(id:measurementKey) { await measureCursors() }
     }
-    func binding<T>(_ id:UUID,_ key:WritableKeyPath<Trace,T>) -> Binding<T> {
-        Binding(get:{model.traces.first { $0.id == id }![keyPath:key]},set:{ value in model.updateTrace(id) { $0[keyPath:key] = value } })
+    func binding<T>(_ trace:Trace,_ key:WritableKeyPath<Trace,T>) -> Binding<T> {
+        Binding(get:{model.traces.first { $0.id == trace.id }?[keyPath:key] ?? trace[keyPath:key]},set:{ value in model.updateTrace(trace.id) { $0[keyPath:key] = value } })
     }
     func value(at time:Double,trace:Trace) -> Double? {
-        guard let series = model.rendered.first(where:{$0.id == trace.id})?.series, !series.times.isEmpty else { return nil }
-        let i = series.times.indices.min { abs(series.times[$0]-time) < abs(series.times[$1]-time) }!
-        return abs(series.times[i]-time) <= max(0.02,1/series.rate) ? series.values[i] : nil
+        guard measuredKey == measurementKey, trace.id == model.focusedTrace?.id else { return nil }
+        return cursorValues[time]
+    }
+    @MainActor private func measureCursors() async {
+        let key = measurementKey
+        cursorValues = [:]; measurementError = nil; measuredKey = key
+        guard let trace = model.focusedTrace, let entry = model.recordings.first(where:{$0.id == trace.sourceID}) else { return }
+        let file = entry.file, offset = model.offset(for:entry.id)
+        let times = Array(Set([model.cursorA,model.cursorB].compactMap({$0})))
+        let displayUnit = SignalDisplayUnit(sourceUnit:file.header.signals[trace.channel].unit)
+        let worker = Task.detached(priority:.userInitiated) { () throws -> [Double:Double] in
+            var values: [Double:Double] = [:]
+            for time in times {
+                if let value = try SignalEngine.value(trace:trace,file:file,time:time-offset) { values[time] = displayUnit.value(value) }
+            }
+            return values
+        }
+        do {
+            let values = try await withTaskCancellationHandler(operation:{ try await worker.value },onCancel:{ worker.cancel() })
+            guard !Task.isCancelled else { return }
+            cursorValues = values
+        } catch is CancellationError { }
+          catch { if !Task.isCancelled { measurementError = error.localizedDescription } }
     }
 }
